@@ -35,7 +35,7 @@ func main() {
 
 	// initialize new logger which writes messages to the standard out stream,
 	// prefixed with currect date and time
-	logger := log.New(os.Stdout, "", log.Ldate|log.Ltime)
+	logger := log.New(os.Stdout, "", log.LstdFlags) //Ldate | Ltime // initial values for the standard logger
 
 	app := &application{
 		config: cfg,
@@ -50,7 +50,7 @@ func main() {
 		WriteTimeout: 30 * time.Second,
 	}
 
-	logger.Printf("starting %s server on %s", cfg.env, srv.Addr)
+	logger.Printf("starting %s server on: http://localhost%s/", cfg.env, srv.Addr)
 	err := srv.ListenAndServe()
 
 	logger.Fatal(err)
