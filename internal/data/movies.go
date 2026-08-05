@@ -1,8 +1,12 @@
 package data
 
 import (
+	"context"
+	"errors"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nitin-dixit/greenlight/internal/validator"
 )
 
@@ -14,6 +18,58 @@ type Movie struct {
 	Runtime   Runtime   `json:"runtime,omitempty"`
 	Genres    []string  `json:"genres,omitempty"`
 	Version   int32     `json:"version"`
+}
+
+type MovieModel struct {
+	DB *pgxpool.Pool
+}
+
+func (m MovieModel) Insert(ctx context.Context, movie *Movie) error {
+	query := `
+	insert into movies (title,year,runtime,genres)
+	values ($1,$2,$3,$4)
+	returning id,created_at,version`
+
+	args := []any{movie.Title, movie.Year, movie.Runtime, movie.Genres}
+
+	return m.DB.QueryRow(ctx, query, args...).Scan(&movie.ID, &movie.CreatedAt, &movie.Version)
+}
+
+func (m MovieModel) Get(ctx context.Context, id int64) (*Movie, error) {
+	if id < 1 {
+		return nil, ErrRecordNotFound
+	}
+	query := `select id, created_at, title, year, runtime, genres, version
+	from movies
+	where id=$1`
+	var movie Movie
+	err := m.DB.QueryRow(ctx, query, id).Scan(
+		&movie.ID,
+		&movie.CreatedAt,
+		&movie.Title,
+		&movie.Year,
+		&movie.Runtime,
+		&movie.Genres,
+		&movie.Version,
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			return nil, ErrRecordNotFound
+
+		default:
+			return nil, err
+		}
+	}
+	return &movie, nil
+}
+
+func (m MovieModel) Update(movie *Movie) error {
+	return nil
+}
+
+func (m MovieModel) Delete(id int64) error {
+	return nil
 }
 
 func ValidateMovie(v *validator.Validator, movie *Movie) {
