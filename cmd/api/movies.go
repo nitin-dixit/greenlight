@@ -37,7 +37,7 @@ func (app *application) createMovieHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	err = app.models.Movies.Insert(movie)
+	err = app.models.Movies.Insert(r.Context(), movie)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return
@@ -59,7 +59,7 @@ func (app *application) showMovieHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	movie, err := app.models.Movies.Get(id)
+	movie, err := app.models.Movies.Get(r.Context(), id)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrRecordNotFound):

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"flag"
 	"fmt"
 	"log"
@@ -11,7 +10,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/joho/godotenv/autoload"
 	"github.com/nitin-dixit/greenlight/internal/data"
 )
@@ -58,17 +56,17 @@ func main() {
 	// prefixed with currect date and time
 	logger := log.New(os.Stdout, "", log.LstdFlags) //Ldate | Ltime // initial values for the standard logger
 
-	db, _, err := openDB(cfg)
+	dbPool, err := openDB(cfg)
 	if err != nil {
 		logger.Fatal(err)
 	}
 
-	defer db.Close()
+	defer dbPool.Close()
 	logger.Printf("database connection pool established")
 	app := &application{
 		config: cfg,
 		logger: logger,
-		models: data.NewModels(db),
+		models: data.NewModels(dbPool),
 	}
 
 	srv := &http.Server{
@@ -85,30 +83,34 @@ func main() {
 	logger.Fatal(err)
 }
 
-func openDB(cfg config) (*sql.DB, *pgxpool.Pool, error) {
-	pool, err := pgxpool.New(context.Background(), cfg.db.dsn)
+func openDB(cfg config) (*pgxpool.Pool, error) {
+	config, err := pgxpool.ParseConfig(cfg.db.dsn)
 	if err != nil {
-		return nil, nil, fmt.Errorf("db: open %w", err)
+		return nil, fmt.Errorf("db: parse config %w", err)
 	}
-	db := stdlib.OpenDBFromPool(pool)
 
-	db.SetMaxOpenConns(cfg.db.maxOpenConns)
-
-	db.SetMaxIdleConns(cfg.db.maxIdleConns)
+	config.MaxConns = int32(cfg.db.maxOpenConns)
+	config.MinConns = int32(cfg.db.maxIdleConns)
 
 	duration, err := time.ParseDuration(cfg.db.maxIdleTime)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
+	config.MaxConnIdleTime = duration
 
-	db.SetConnMaxIdleTime(duration)
+	pool, err := pgxpool.NewWithConfig(context.Background(), config)
+	if err != nil {
+		return nil, fmt.Errorf("db: open %w", err)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	err = db.PingContext(ctx)
+
+	err = pool.Ping(ctx)
 	if err != nil {
-		db.Close()
-		return nil, nil, fmt.Errorf("db: ping %w", err)
+		pool.Close()
+		return nil, fmt.Errorf("db: ping %w", err)
 	}
-	return db, pool, nil
+
+	return pool, nil
 }

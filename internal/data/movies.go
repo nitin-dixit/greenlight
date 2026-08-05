@@ -1,11 +1,12 @@
 package data
 
 import (
-	"database/sql"
+	"context"
 	"errors"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nitin-dixit/greenlight/internal/validator"
 )
 
@@ -20,10 +21,10 @@ type Movie struct {
 }
 
 type MovieModel struct {
-	DB *sql.DB
+	DB *pgxpool.Pool
 }
 
-func (m MovieModel) Insert(movie *Movie) error {
+func (m MovieModel) Insert(ctx context.Context, movie *Movie) error {
 	query := `
 	insert into movies (title,year,runtime,genres)
 	values ($1,$2,$3,$4)
@@ -31,10 +32,10 @@ func (m MovieModel) Insert(movie *Movie) error {
 
 	args := []any{movie.Title, movie.Year, movie.Runtime, movie.Genres}
 
-	return m.DB.QueryRow(query, args...).Scan(&movie.ID, &movie.CreatedAt, &movie.Version)
+	return m.DB.QueryRow(ctx, query, args...).Scan(&movie.ID, &movie.CreatedAt, &movie.Version)
 }
 
-func (m MovieModel) Get(id int64) (*Movie, error) {
+func (m MovieModel) Get(ctx context.Context, id int64) (*Movie, error) {
 	if id < 1 {
 		return nil, ErrRecordNotFound
 	}
@@ -42,18 +43,18 @@ func (m MovieModel) Get(id int64) (*Movie, error) {
 	from movies
 	where id=$1`
 	var movie Movie
-	err := m.DB.QueryRow(query, id).Scan(
+	err := m.DB.QueryRow(ctx, query, id).Scan(
 		&movie.ID,
 		&movie.CreatedAt,
 		&movie.Title,
 		&movie.Year,
 		&movie.Runtime,
-		pgtype.NewMap().SQLScanner(&movie.Genres),
+		&movie.Genres,
 		&movie.Version,
 	)
 	if err != nil {
 		switch {
-		case errors.Is(err, sql.ErrNoRows):
+		case errors.Is(err, pgx.ErrNoRows):
 			return nil, ErrRecordNotFound
 
 		default:
