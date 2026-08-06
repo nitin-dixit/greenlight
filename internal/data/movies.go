@@ -81,7 +81,25 @@ func (m MovieModel) Update(ctx context.Context, movie *Movie) error {
 	return m.DB.QueryRow(ctx, query, args...).Scan(&movie.Version)
 }
 
-func (m MovieModel) Delete(id int64) error {
+func (m MovieModel) Delete(ctx context.Context, id int64) error {
+	if id < 1 {
+		return ErrRecordNotFound
+	}
+
+	query := `delete from movies
+	where id = $1`
+
+	result, err := m.DB.Exec(ctx, query, id)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected := result.RowsAffected()
+
+	if rowsAffected == 0 {
+		return ErrRecordNotFound
+	}
+
 	return nil
 }
 
