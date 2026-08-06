@@ -64,8 +64,21 @@ func (m MovieModel) Get(ctx context.Context, id int64) (*Movie, error) {
 	return &movie, nil
 }
 
-func (m MovieModel) Update(movie *Movie) error {
-	return nil
+func (m MovieModel) Update(ctx context.Context, movie *Movie) error {
+	query := `update movies
+	set title=$1, year=$2, runtime=$3, genres=$4, version=version+1
+	where id=$5
+	returning version`
+
+	args := []any{
+		movie.Title,
+		movie.Year,
+		movie.Runtime,
+		movie.Genres,
+		movie.ID,
+	}
+
+	return m.DB.QueryRow(ctx, query, args...).Scan(&movie.Version)
 }
 
 func (m MovieModel) Delete(id int64) error {
