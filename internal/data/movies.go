@@ -130,12 +130,14 @@ func (m MovieModel) GetAll(ctx context.Context, title string, genres []string, f
 	query := `
 	select id, created_at, title, year, runtime, genres,version
 	from movies
+	where (lower(title)=lower($1) or $1='')
+	and (genres @> $2 or $2 ='{}')
 	order by id`
 
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
-	rows, err := m.DB.Query(ctxWithTimeout, query)
+	rows, err := m.DB.Query(ctxWithTimeout, query, title, genres)
 	if err != nil {
 		return nil, err
 	}
