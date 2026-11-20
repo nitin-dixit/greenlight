@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/joho/godotenv/autoload"
 	"github.com/nitin-dixit/greenlight/internal/data"
+	"github.com/nitin-dixit/greenlight/internal/jsonlog"
 )
 
 const version = "1.0.0"
@@ -31,7 +32,7 @@ type config struct {
 // holds dependencies for HTTP handler, helpers, and middlewares.
 type application struct {
 	config config
-	logger *log.Logger
+	logger *jsonlog.Logger
 	models data.Models
 }
 
@@ -52,17 +53,16 @@ func main() {
 	flag.StringVar(&cfg.db.maxIdleTime, "db-max-idle-time", "15m", "PostgreSQL max connection idle time")
 	flag.Parse()
 
-	// initialize new logger which writes messages to the standard out stream,
-	// prefixed with currect date and time
-	logger := log.New(os.Stdout, "", log.LstdFlags) //Ldate | Ltime // initial values for the standard logger
-
+	// initialize new jsonlog.Logger which writes any messages *at or above" the INFO
+	// severity level to the standard out stream.
+	logger := jsonlog.New(os.Stdout, jsonlog.LevelInfo)
 	dbPool, err := openDB(cfg)
 	if err != nil {
-		logger.Fatal(err)
+		logger.PrintFatal(err, nil)
 	}
 
 	defer dbPool.Close()
-	logger.Printf("database connection pool established")
+	logger.PrintInfo("database connection pool established", nil)
 	app := &application{
 		config: cfg,
 		logger: logger,
@@ -70,17 +70,24 @@ func main() {
 	}
 
 	srv := &http.Server{
-		Addr:         fmt.Sprintf(":%d", cfg.port),
-		Handler:      app.routes(),
+		Addr:    fmt.Sprintf(":%d", cfg.port),
+		Handler: app.routes(),
+		// Create the new log.Logger isntance with the log.New() function passing in
+		// out custom Logger as the first parameter. The "" and 0 indicate that the
+		// log.Logger isntance should not use prefix or any flags.
+		ErrorLog:     log.New(logger, "", 0),
 		IdleTimeout:  time.Minute,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
 	}
 
-	logger.Printf("starting %s server on: http://localhost%s/", cfg.env, srv.Addr)
+	logger.PrintInfo("starting server", map[string]string{
+		"addr": srv.Addr,
+		"env":  cfg.env,
+	})
 	err = srv.ListenAndServe()
 
-	logger.Fatal(err)
+	logger.PrintFatal(err, nil)
 }
 
 func openDB(cfg config) (*pgxpool.Pool, error) {
