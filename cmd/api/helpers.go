@@ -30,7 +30,7 @@ func (app *application) readIDParam(r *http.Request) (int64, error) {
 func (app *application) writeJSON(w http.ResponseWriter, status int, data envelope, headers http.Header) error {
 	js, err := json.MarshalIndent(data, "", "\t")
 	if err != nil {
-		app.logger.Print(err)
+		app.logger.PrintError(err, nil)
 		http.Error(w, "The server encountered a problem and could not process your request", http.StatusInternalServerError)
 		return err
 	}
